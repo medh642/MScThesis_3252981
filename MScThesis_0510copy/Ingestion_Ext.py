@@ -1,4 +1,4 @@
-"""
+""" Latest
 This file creates a knowledge base for the model to retrieve relevant information to guide code generation. 
 It uses prompts.json (prompts_pyqgis and prompts_python), and scrapes from the PyQGIS documentation and important geospatial python libraries to access documentation of useful functions and tools.
 The information is then converted into chunks (chunking + indexing) and then stored into a vectorDB (ChromaDB)
@@ -20,6 +20,11 @@ import importlib, inspect
 # For input layer ingestion 
 import geopandas as gpd
 import rasterio 
+# For metadata enrichment with LLM 
+from langchain_ollama import OllamaLLM 
+import json, re 
+from chromadb import PersistentClient 
+from sentence_transformers import SentenceTransformer
 
 # Define constants 
 CHUNK_SIZE = 1200
@@ -285,7 +290,7 @@ def ingest_python_geo_docs(persist_dir, libs=None):
     and stored them in a ChromaDB 
     """
     if libs is None:
-        libs = ["geopandas", "shapely", "rasterio", "folium"]
+        libs = ["geopandas", "shapely", "rasterio", "fiona", "folium"]
     
     os.makedirs(persist_dir, exist_ok=True)
     model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -394,6 +399,37 @@ def extract_layer_metadata(filepath):
     except Exception as e:
         metadata['error'] = str(e)
     return metadata
+
+#---------------------- METADATA ENGICHMENT WITH LLM -------------
+def enrich_metadata(metadata_dict):
+    """Uses Llama to generate semantic summary and keywords for each input layer"""
+    llm = OllamaLLM(model="llama3.2", temperature=0)
+    prompt = f"""
+You are a geospatial metadata assistant.
+Given the dataset metadata, generate a short semantic description including:
+- Purpose or theme of the dataset
+- Potential use cases (e.g., land use classification, transport, hydrology)
+- Suggested keywords
+Input metadata:
+{json.dumps(metadata_dict, indent=2)}
+Respond ONLY with a JSON object in this format:
+{{
+"description": "Provide a concise description here.", 
+"theme": "Provide the main theme here.", 
+"keywords": ["Provide", "relevant", "keywords"]
+}}"""
+    response = llm.invoke(prompt)
+    match = re.search(r'\{.*\}', response, re.DOTALL)
+    if not match:
+        print("[WARN] Could not parse model response, skipping metadata enrichment")
+        return None 
+    try:
+        data = json.loads(match.group(0))
+        return data
+    except json.JSONDecodeError:
+        print("[WARN] Invalid JSON format in model output")
+        return None 
+    
 ############ Ingest metadata (to be continued)
 # def store_input_layer_metadat(filepaths, persist_dir):
 #     client = PersistentClient(path=persist_dir)
@@ -414,6 +450,9 @@ def extract_layer_metadata(filepath):
 #     print(f"[INFO] Added {len(filepaths)} layers to input_layers collection.")
 
 ##### RETRIEVAL OF INPUT LAYERS (TO BE CONTINUED)
+## 11-11-2025 The retrieval function has been adjusted now to include also an 
+# enrichment component that uses an LLM to create semantic summaries
+
 def ingest_input_layers(persist_dir, layer_paths):
     """Extracts metadata from user input data and stores them in a separate
     collection 'input_layers' in ChromaDB"""
@@ -427,19 +466,30 @@ def ingest_input_layers(persist_dir, layer_paths):
     for fp in layer_paths:
         meta = extract_layer_metadata(fp)
         ## Adjusted to handle geodatabase layers 10-11-2025
+        if meta.get('error'):
+            print(f"[WARN] Skipping {fp} due to error: {meta['error']}")
         if meta.get('type') == 'geodatabase':
             for k, layer_meta in meta.items():
-                if k.startswith('layer_'):
-                    layer_text = json.dumps(layer_meta, indent=2)
-                    docs.append(layer_text)
-                    metas.append(layer_meta)
-                    ids.append(make_id("input", os.path.basename(fp), k))
+                if not k.startswith('layer_'):
+                    continue 
+                print(f"[INFO] Enriching metadata for layer: {layer_meta.get('layer_name', 'unknown')}")
+                enriched = enrich_metadata(layer_meta)
+                if enriched:
+                    layer_meta.update(enriched)
+                layer_text = json.dumps(layer_meta, indent=2)
+                docs.append(layer_text)
+                metas.append(layer_meta)
+                ids.append(make_id("input", os.path.basename(fp), k))
         else:
+            print(f"[INFO] Enriching metadata for: {os.path.basename(fp)}")
+            enriched = enrich_metadata(meta)
+            if enriched:
+                meta.update(enriched)
             meta_text = json.dumps(meta, indent=2)
             docs.append(meta_text)
             metas.append(meta)
             # Check if input is valid here 
-            ids.append(make_id("input_gdb", os.path.basename(fp)))
+            ids.append(make_id("input_layer", os.path.basename(fp)))
 
     def sanitize_metadata(meta):
         clean_meta = {}
