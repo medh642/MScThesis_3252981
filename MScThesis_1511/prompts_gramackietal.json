@@ -1,0 +1,17 @@
+{
+  "load shapefile": "import geopandas as gpd\nshp = gpd.read_file('file.shp')\nprint(shp.head())",
+  "plot shapefile": "import geopandas as gpd\nshp = gpd.read_file('file.shp')\nshp.plot()",
+  "filter shapefile by attribute": "import geopandas as gpd\nshp = gpd.read_file('file.shp')\nfiltered = shp[shp['column'] == 'value']\nprint(filtered)",
+  "get shapefile crs": "import geopandas as gpd\nshp = gpd.read_file('file.shp')\nprint(shp.crs)",
+  "reproject shapefile": "import geopandas as gpd\nshp = gpd.read_file('file.shp')\nreproj = shp.to_crs('EPSG:4326')\nprint(reproj.head())",
+  "calculate shapefile area": "import geopandas as gpd\nshp = gpd.read_file('file.shp')\nshp['area'] = shp.geometry.area\nprint(shp.head())",
+  "dissolve shapefile by attribute": "import geopandas as gpd\nshp = gpd.read_file('file.shp')\ndissolved = shp.dissolve(by='column')\nprint(dissolved)",
+  "load raster": "import rasterio\nwith rasterio.open('file.tif') as src:\n    print(src.profile)",
+  "plot raster": "import rasterio\nimport matplotlib.pyplot as plt\nwith rasterio.open('file.tif') as src:\n    plt.imshow(src.read(1), cmap='viridis')\n    plt.show()",
+  "read raster band": "import rasterio\nwith rasterio.open('file.tif') as src:\n    band1 = src.read(1)\n    print(band1.shape)",
+  "get raster crs": "import rasterio\nwith rasterio.open('file.tif') as src:\n    print(src.crs)",
+  "get raster bounds": "import rasterio\nwith rasterio.open('file.tif') as src:\n    print(src.bounds)",
+  "clip raster by shapefile": "import rasterio\nimport geopandas as gpd\nfrom rasterio.mask import mask\nshp = gpd.read_file('file.shp')\nwith rasterio.open('file.tif') as src:\n    out_image, out_transform = mask(src, shp.geometry, crop=True)\n    print(out_image.shape)",
+  "calculate zonal statistics": "import geopandas as gpd\nimport rasterio\nfrom rasterstats import zonal_stats\nshp = gpd.read_file('file.shp')\nwith rasterio.open('file.tif') as src:\n    stats = zonal_stats(shp, src.read(1), affine=src.transform)\n    print(stats)",
+  "raster to numpy array": "import rasterio\nimport numpy as np\nwith rasterio.open('file.tif') as src:\n    arr = src.read()\n    print(arr.shape)"
+}
