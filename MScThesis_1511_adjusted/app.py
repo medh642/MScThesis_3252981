@@ -7,7 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from retrieval_pipeline import retrieve_from_all_collections
 
-PERSIST_DIR = r"C:\Users\medha\OneDrive - University of Twente\Documents\YEAR2\Master'sThesis\Codes\chroma_db"
+PERSIST_DIR = r"C:\Users\medha\OneDrive - University of Twente\Documents\YEAR2\MasterThesis\Codes\chroma_db"
 COLLECTIONS = ["Python_docs", "input_layers"]
 
 default_session = {
@@ -144,6 +144,8 @@ st.sidebar.header("Environment settings")
 env = st.sidebar.selectbox("Select Environment", ["Python", "PyQGIS"])
 task = st.sidebar.selectbox("Select Task", ["Spatial Analysis", "Data Extraction", "Visualization", "Other"])  
 
+
+
 if st.session_state["stage"] == "query":
     user_query = st.text_area("Enter your geospatial query:",
                               placeholder="e.g. What is the area of the intersection of Polygon A and Polygon B")   
@@ -153,11 +155,20 @@ if st.session_state["stage"] == "query":
             st.stop()
 
         with st.spinner("Running information gate..."):
+            ## ==========Adjusting the input_meta to include it in the information gate function 
+            retrieved_layers, _ = retrieve_from_all_collections(
+                query=user_query, 
+                persist_dir=PERSIST_DIR, 
+                collections=["input_layers"], 
+                top_k=1
+            )
+            input_meta = retrieved_layers.get("input_layers", [])
             gate_result = run_information_gate(
                 user_query=user_query, 
                 env=env,
                 task=task,
-                input_layer_metas=[],
+                # input_layer_metas=[] # Needs to be adjusted to actual input_layer metas
+                input_layer_metas=input_meta, 
                 retrieved_docs=[]
             )
         st.session_state["user_query"] = user_query
@@ -191,15 +202,21 @@ elif st.session_state["stage"] == "generation":
 
     if st.session_state["context"] is None:
         with st.spinner("Fetching context from collections..."):
-            context = retrieve_from_all_collections(
+            retrieved, context = retrieve_from_all_collections(
                 final_query,
                 PERSIST_DIR, 
                 COLLECTIONS, 
                 top_k=3
             )
             st.session_state["context"] = context
+            ## Adjusted 18-11-2025 -> To deal with collections separately
+            # st.session_state["retrieved"] = retrieved
+            # st.session_state["input_meta"] = retrieved.get("input_layers", [])
+        # input_meta = st.session_state["input_meta"]
     else:
         context = st.session_state["context"]
+        # retrieved = st.session_state["retrieved"]
+        # input_meta = st.session_state["input_meta"]
     # st.text_area("Retrieved Context", context, height=200)
     with st.expander("Retrieved context (click to expand)"):
         st.text_area("Retrieved Context", context, height=200)
@@ -207,9 +224,96 @@ elif st.session_state["stage"] == "generation":
     if st.session_state["response"] is None:
         with st.spinner("Generating geospatial code..."):
             llm = OllamaLLM(model="llama3.2", temperature=0)
-            # template = """"
-            # You are a Python geospatial assistant that generates accurate and efficient code.
+            template = """"
+            You are a Python geospatial assistant that generates accurate and efficient code.
 
+            Use the provided context and clarification to guide your answer.
+
+            ---
+            ### Context:
+            {context}
+
+            ### User Query:
+            {query}
+
+            ### Clarification:
+            {clarification}
+
+            ### Instructions:
+            1. Generate **complete, minimal, well-commented Python code**.
+            2. Use correct geospatial libraries.
+            3. Add a short explanation after the code block.
+
+            You MUST output ONLY a python code block in this format
+            ### Output Format:
+            ```python
+            # code here  
+            ```      
+            """
+#             template = """
+# You are a geospatial Python assistant.
+
+# You MUST first determine what kind of task the user query asks for.
+# Do NOT assume geospatial operations unless necessary.
+
+# ---
+
+# ## USER QUERY
+# {query}
+
+# ## CLARIFICATION (if any)
+# {clarification}
+
+# ## CONTEXT (retrieved data)
+# {context}
+
+
+
+# ---
+
+# ### STEP 1 — TASK CLASSIFICATION (MANDATORY)
+
+# Classify the task as one of the following (output exactly one):
+
+# - "non-spatial"
+# - "spatial-data-loading"
+# - "spatial-analysis"
+
+# Rules:
+# • Questions like *“list all provinces”*, *“show unique city names”*, *“what CRS is this dataset”* are **non-spatial**.
+# • Questions that involve loading a dataset but no geometry operations are **spatial-data-loading**.
+# • Questions about area, intersection, buffers, distances, overlays, raster stats, etc. are **spatial-analysis**.
+
+# Output format:
+# Task: <classification>
+
+# ---
+
+# ### STEP 2 — PLAN (MAX 2 BULLETS)
+# Write a short plan appropriate for the task.
+# If non-spatial → plan must NOT include shapely, rasterio, or geometry ops.
+
+# ---
+
+# ### STEP 3 — PYTHON CODE
+# Write an executable Python code to answer user query.
+
+# Rules:
+# • If task is "non-spatial" → use only built-ins or pandas/geopandas for table operations.
+# • If task is "spatial-data-loading" → only load the dataset (NO spatial ops).
+# • If task is "spatial-analysis" → use geopandas, shapely, or rasterio as needed.
+# • NEVER invent fields, geometry operations, or polygon examples.
+# • NEVER add random test code or fake polygons.
+# • Use ONLY datasets listed in input_meta.
+
+# Output format (STRICT):
+
+# ```python
+# # code here
+# """
+        ##========ADJUSTED ON 13-11-2025 (Adding few-shot examples)============= (switching accurate and syntacically correct to **accurate minimala and executable**)
+            # template = """
+            # You are a Python geospatial assistant that generates **accurate, minimal, and executable** code. 
             # Use the provided context and clarification to guide your answer.
 
             # ---
@@ -217,56 +321,14 @@ elif st.session_state["stage"] == "generation":
             # {context}
 
             # ### User Query:
-            # {query}
-
-            # ### Clarification:
+            # {query}                 
+            
+            # ### Clarification (if any):
             # {clarification}
 
-            # ### Instructions:
-            # 1. Generate **complete, well-commented Python code**.
-            # 2. Use correct geospatial libraries (PyQGIS, Geopandas, Rasterio).
-            # 3. Add a short explanation after the code block.
-
-            # You MUST output ONLY a python code block in this format
-            # ### Output Format:
-            # ```python
-            # # code here  
-            # ```      
+            # ### Input Data Metadata (Select only relevant path from input_meta)
+            # {input_meta}
             # """
-        ##========ADJUSTED ON 13-11-2025 (Adding few-shot examples)============= (switching accurate and syntacically correct to **accurate minimala and executable**)
-            template = """
-            You are a Python geospatial assistant that generates **accurate, minimal, and executable** code. 
-            Use the provided context and clarification to guide your answer.
-
-            ---
-
-            ### Context:
-            {context}
-
-            ### User Query:
-            {query}
-
-            ### Clarification (if any):
-            {clarification}
-
-            ### Available Examples:
-            Use the following examples as a guide for syntax, library use, and logical structure:
-            **Examples**
-            1. Load shapefile:
-            ```python
-            import geopandas as gpd
-            shp = gpd.read_file('file.shp')
-            print(shp.head())
-            2. Load specific layer from a GeoPackage 
-            ```python 
-            import geopandas as gps 
-            gdf = gpd.read_file("data/urban.gpkg", layer="roads")
-            print(gdf.head())
-            3. Inspect available layers in a GeoPackage 
-            import fiona 
-            layers = fiona.listlayers('data/urban.gpkg')
-            print(layers)
-            """
 
 
             prompt = ChatPromptTemplate.from_template(template)
@@ -274,17 +336,27 @@ elif st.session_state["stage"] == "generation":
                 {
                     "context": RunnablePassthrough() | (lambda q: context),
                     "query": RunnablePassthrough(), 
-                    "clarification": RunnablePassthrough()
+                    "clarification": RunnablePassthrough(), 
+                    # "input_meta": RunnablePassthrough()
                 }
                 | prompt
                 | llm
             )
 
-            response = rag_chain.invoke(final_query)
+            # response = rag_chain.invoke(final_query)
+            ## Adjusted 18-11-2025 
+            response = rag_chain.invoke({
+                "query": final_query, 
+                "context": context, 
+                # "input_meta": json.dumps(input_meta, indent=2), 
+                "clarification": clarification
+            })
             st.session_state["response"] = response
     else:
         response = st.session_state["response"]
     st.subheader("Generated code and explanation")
+    with st.expander("Raw model Output"):
+        st.text_area("Raw Output", response, height=250)
     # st.markdown(response)
     # Display code as formatted code block 07-11-2025
     # st.markdown(response, unsafe_allow_html=True)

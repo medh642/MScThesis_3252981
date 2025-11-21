@@ -25,6 +25,7 @@ from langchain_ollama import OllamaLLM
 import json, re 
 from chromadb import PersistentClient 
 from sentence_transformers import SentenceTransformer
+from langchain_huggingface import HuggingFaceEmbeddings
 
 # Define constants 
 CHUNK_SIZE = 1200
@@ -109,7 +110,7 @@ def fetch_page(url, cache, version="3.34", module=None, tags=None):
     headings = [h.get_text(strip=True) for h in soup.find_all(["h1", "h2", "h3", "h4"])]
 
     return {
-        "url": url,
+        "url": url, 
         "soup": soup,
         "title": title_text,
         "headings": headings,
@@ -225,8 +226,12 @@ def ingest(version, persist_dir, prompt_examples=None):
 
     print(f"[INFO] Prepared {len(docs)} chunks")
 
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    embeddings = model.encode(docs, convert_to_numpy=True).tolist()
+    # model = SentenceTransformer("all-MiniLM-L6-v2")
+    # embeddings = model.encode(docs, convert_to_numpy=True).tolist() 
+    ### Changing to HuggingFaceEmbeddings to align with retrieval code
+    embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embeddings = embedder.embed_documents(docs)
+
 
     # settings = Settings(chroma_db_impl="duckdb+parquet", persist_directory=persist_dir)
     # client = chromadb.Client(settings)
@@ -378,7 +383,8 @@ def extract_layer_metadata(filepath):
                     'bounds': gdf.total_bounds.tolist() if hasattr(gdf, 'total_bounds') else []
                 }
                 metadata[f'layer_{layer}'] = layer_metadata
-            metadata['type'] = 'geodatabase'       
+            metadata['type'] = 'geodatabase'     
+            metadata['layers']  = layers
 
 
         elif ext in ['.tif', '.tiff']:
@@ -457,7 +463,10 @@ def ingest_input_layers(persist_dir, layer_paths):
     """Extracts metadata from user input data and stores them in a separate
     collection 'input_layers' in ChromaDB"""
     os.makedirs(persist_dir, exist_ok=True)
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    # model = SentenceTransformer("all-MiniLM-L6-v2")
+    embedder = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
     client = PersistentClient(path=persist_dir)
     coll = client.get_or_create_collection("input_layers")
 
@@ -472,19 +481,19 @@ def ingest_input_layers(persist_dir, layer_paths):
             for k, layer_meta in meta.items():
                 if not k.startswith('layer_'):
                     continue 
-                print(f"[INFO] Enriching metadata for layer: {layer_meta.get('layer_name', 'unknown')}")
-                enriched = enrich_metadata(layer_meta)
-                if enriched:
-                    layer_meta.update(enriched)
+                # print(f"[INFO] Enriching metadata for layer: {layer_meta.get('layer_name', 'unknown')}")
+                # enriched = enrich_metadata(layer_meta) -> DO NOT INCLUDE FOR BASELINE MODEL
+                # if enriched:
+                #     layer_meta.update(enriched)
                 layer_text = json.dumps(layer_meta, indent=2)
                 docs.append(layer_text)
                 metas.append(layer_meta)
                 ids.append(make_id("input", os.path.basename(fp), k))
         else:
-            print(f"[INFO] Enriching metadata for: {os.path.basename(fp)}")
-            enriched = enrich_metadata(meta)
-            if enriched:
-                meta.update(enriched)
+            # print(f"[INFO] Enriching metadata for: {os.path.basename(fp)}")
+            # enriched = enrich_metadata(meta)
+            # if enriched:
+            #     meta.update(enriched)
             meta_text = json.dumps(meta, indent=2)
             docs.append(meta_text)
             metas.append(meta)
@@ -504,7 +513,8 @@ def ingest_input_layers(persist_dir, layer_paths):
                 clean_meta[k] =str(v)
         return clean_meta
     metas = [sanitize_metadata(m) for m in metas if m is not None]
-    embeddings = model.encode(docs,convert_to_numpy=True).tolist()
+    # embeddings = model.encode(docs,convert_to_numpy=True).tolist()
+    embeddings = embedder.embed_documents(docs)
     coll.add(documents=docs, metadatas=metas, ids=ids, embeddings=embeddings)
 
     print(f"[INFO] Added {len(layer_paths)} layer(s) to collection 'input_layers'.")

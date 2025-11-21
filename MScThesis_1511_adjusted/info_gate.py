@@ -117,6 +117,7 @@ def format_docs_summary(docs):
 # 13-11-2025 
 # Adjusting run_information_gate() function; Right now the function checks if the pre-conditions and post-conditions are satisfied 
 # before proceeding to the generation steps
+# def run_information_gate(user_query, env, task, input_layer_metas, retrieved_docs, model_name="llama3.2"):
 def run_information_gate(user_query, env, task, input_layer_metas, retrieved_docs, model_name="llama3.2"):
     """
     Evaluate whether the system has sufficient information to proceed with code genertion. 
@@ -124,7 +125,55 @@ def run_information_gate(user_query, env, task, input_layer_metas, retrieved_doc
     Returns JSON decision 
     """
     llm = OllamaLLM(model=model_name, temperature=0)
-    prompt=f"""
+# 16-11: Removing the env part to see performance differences:
+#     prompt=f"""
+# You are a geospatial reasoning and validation assistant. 
+# Your task is to check whether the user's query can be executed correctly 
+# based on the available data and context.
+
+# ---
+# ### Inputs 
+# User Query:
+# {user_query}
+
+# Environment: {env}
+# Task Type: {task}
+
+# Input Layers Metadata:
+# {format_layer_metadata_for_prompt(input_layer_metas)}
+
+# Retrieved_context:
+# {format_docs_summary(retrieved_docs)}
+
+# ---
+# ### Validation Logic:
+# You must check two things:
+# 1. **Pre-conditions** - Are all necessary inputs provided or deliverable?
+# 2. **Post-conditions** - Can a valid, meaningful output be produced?
+
+# If *both* are satisfied, return:
+#     preconditions_satisfied: true
+#     postconditions_satisfied: true 
+#     need_clarification: false
+
+# If not, return:
+#     need_clarification: true
+#     and a single clarification question to make the missing condition TRUE.
+
+# ---
+
+# ### Output Format (STRICT JSON)
+# {{
+# "preconditions_satisfied": true|false, 
+# "postconditions_satisfied": true|false, 
+# "need_clarification": true|false, 
+# "missing_elements": ["list of missing inputs or ambiguities"], 
+# "clarification_question": "Ask one concise question to resolve ambiguity", 
+# "confidence": float (0.0 to 1.0)
+# }}
+# """
+##==================PROMPT ADJUSTED ON 16-11-2025===================
+    prompt = f"""
 You are a geospatial reasoning and validation assistant. 
 Your task is to check whether the user's query can be executed correctly 
 based on the available data and context.
@@ -134,11 +183,8 @@ based on the available data and context.
 User Query:
 {user_query}
 
-Environment: {env}
-Task Type: {task}
-
 Input Layers Metadata:
-{format_layer_metadata_for_prompt(input_layer_metas)}
+{input_layer_metas}
 
 Retrieved_context:
 {format_docs_summary(retrieved_docs)}
@@ -170,6 +216,48 @@ If not, return:
 "confidence": float (0.0 to 1.0)
 }}
 """
+# ## ================= NEW PROMPT => 18-11-2025====================
+#     prompt = """
+# You are a geospatial reasoning and validation assistant. 
+# Your task is to check whether the user's query can be executed correctly 
+# based on the available input data and context.
+
+# ### Inputs
+# ### User query:
+# {user_query}
+
+# ### Available input data
+# {json.dumps(input_kayer_metas, indent=2)}
+
+# ### Validation logic 
+# You must evaluate two things:
+# 1. **Pre-conditions (DATA CHECK)**
+# - Does the user request a dataset that is NOT present?
+# - Are required fields/columns available?
+
+# 2. **Post-conditions (OUTPUT CHECK)**
+# - Can the requested output be meaningfully produced?
+# - Is the operation well-defined (buffer, clip, overlay, zonal stats, etc.)?
+
+# If BOTH Pre-conditions and Post-conditions are satisfied:
+#     need_clarification = false 
+
+# If ANY condition is missing:
+#     need_clarification = true
+#     Ask exactly ONE clarification question that resolves the missing information. 
+
+# ### Output Format (STRICT JSON)
+# {{
+# "preconditions_satisfied": true|false, 
+# "postconditions_satisfied": true|false, 
+# "need_clarification": true|false, 
+# "missing_elements": ["list of missing inputs or ambiguities"], 
+# "clarification_question": "Ask one concise question to resolve ambiguity", 
+# "confidence": float (0.0 to 1.0)
+# }}    
+# """
+
+
 
     if DEBUG:
         print("\n[INFO GATE PROMPT] ===")
@@ -209,12 +297,6 @@ If not, return:
             "clarification_question": "Could you specify missing input(s)?", 
             "confidence": 0.0
         }
-
-
-
-
-
-
 
 def clarification_interaction(gate_result):
     """Interactively ask user once for clarification"""

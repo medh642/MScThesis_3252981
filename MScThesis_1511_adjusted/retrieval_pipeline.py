@@ -162,7 +162,13 @@ def retrieve_from_all_collections(query, persist_dir, collections=None, version=
     # Create a summary context for LLM input
     context_summary = "\n\n".join(all_docs_text[:top_k * len(collections)]) or "No relevant data retrieved."
 
-    return results, context_summary
+    # return results, context_summary
+    # 18-11-2025 -> Adjusting to make the function retrieve collections separately
+    return {
+        "input_layers": results.get("input_layers", []), 
+        "python_docs": results.get("Python_docs", []), 
+        "pyqgis_docs": results.get(normalize_collection_name(f"pyqgis_{version.replace('.', '_')}_docs"), [])
+    }, context_summary
 
 if __name__ == "__main__":
     import argparse 
