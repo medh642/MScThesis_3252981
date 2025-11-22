@@ -264,7 +264,7 @@ def ingest(version, persist_dir, prompt_examples=None):
             }))
             ex_ids.append(str(ex.get("id", make_id('ex', ex['prompt'][:20]))))
 
-        emb = model.encode(ex_docs, convert_to_numpy=True).tolist()
+        emb = embedder.embed_documents(ex_docs)
         ex_coll = client.get_or_create_collection(name=f"pyqgis_{version.replace('.', '_')}_examples")
         ex_coll.add(documents=ex_docs, embeddings=emb, metadatas=ex_meta, ids=ex_ids)
         # client.persist()

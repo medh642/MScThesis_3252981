@@ -3,7 +3,7 @@
     "query": "Load the Netherlands_Landuse.gpkg layer and print the total number of agricultural polygons (category = 'Bouwland')."
   },
   {
-    "query": "Load the NL_Provinces.shp file and extract the geometry bounds for the province named 'Zuid-Holland'."
+    "query": "Load the NL_Provinces.shp file and extract the geometry bounds for the province named 'Noord-Holland'."
   }, 
     {
     "query": "Load the RotterdamLULC.shp dataset and calculate the total area for each class_2018 category."
