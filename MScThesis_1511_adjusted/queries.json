@@ -9,7 +9,7 @@
     "query": "Load the RotterdamLULC.shp dataset and calculate the total area for each class_2018 category."
   },
   {
-    "query": "Overlay the NL_Highways.gpkg roads onto NL_Provinces.shp and compute how many highway segments fall inside each province."
+    "query": "How many railway stations are there in 'Drenthe' province and list them?"
   },
   {
     "query": "Clip the Netherlands_Landuse.gpkg polygons using the boundary of RotterdamLULC.shp and save the clipped output to a new file."
