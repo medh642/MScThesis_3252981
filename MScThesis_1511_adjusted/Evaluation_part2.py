@@ -1,6 +1,8 @@
 """This evaluation setup uses LLM-as-a-judge to assess the semantic similarity of code"""
 import json 
 import re
+from statistics import mean
+import csv
 from langchain_ollama import OllamaLLM 
 
 def llm_judge_evaluate(ref_code:str, gen_code:str, model_name="llama3.2"):
@@ -112,5 +114,88 @@ print(neighbors[['NAME_1']])
 
 
 
-result = llm_judge_evaluate(ref_code, gen_code)
-print(result)
+# result = llm_judge_evaluate(ref_code, gen_code)
+# print(result)
+## ADJUSTED 25-11-2025 -> Evaluates an entire generated dataset with reference dataset
+def evaluate_dataset(generated_path, reference_path, model_name="llama3.2"):
+    generated = json.load(open(generated_path))
+    reference = json.load(open(reference_path))
+    ref_by_query = {item["query"]: item["reference"] for item in reference}
+    results = []
+    for item in generated:
+        query = item["query"]
+        gen_code = item["response"]
+        if query not in ref_by_query:
+            print(f"No reference found for query {query}")
+            continue
+        ref_code = ref_by_query[query]
+
+        eval_result = llm_judge_evaluate(ref_code, gen_code, model_name=model_name)
+        results.append({
+            "query": query, 
+            "semantic_score": eval_result["semantic_score"], 
+            "completeness_score": eval_result["completeness_score"], 
+            "quality_score": eval_result["quality_score"], 
+            "equivalent": eval_result["equivalent"], 
+            "explanation": eval_result["final_score"]
+        })
+    summary = {
+        "mean_semantic_score": mean([r["semantic_score"] for r in results]),
+        "mean_completeness_score": mean([r["completeness_score"] for r in results]), 
+        "mean_quality_score": mean([r["quality_score"] for r in results]), 
+        "equivalent_rate": sum(r["equivalent"] for r in results)/len(results),
+        "num_items": len(results)
+    }
+    return {"per_query": results, "summary": summary}
+
+
+output = evaluate_dataset(
+    generated_path=r"MScThesis_1511_adjusted/generated_code.json", 
+    reference_path=r"MScThesis_1511_adjusted/references.json", 
+    model_name="llama3.2"
+)
+
+### 26-11 Exporting results to csv
+# print(json.dumps(output, indent=2))
+def export_results_to_csv(results, per_query_path="results_per_query.csv", summary_path="overall_results.csv"):
+    per_query = results["per_query"]
+    summary = results["summary"]
+    with open(per_query_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "query", 
+            "semantic_score", 
+            "completeness_score", 
+            "quality_score", 
+            "equivalent",
+            "explanation"
+        ])
+        for row in per_query:
+            writer.writerow([
+                row["query"],
+                row["semantic_score"],
+                row["completeness_score"],
+                row["quality_score"], 
+                row["equivalent"], 
+                row["explanation"]
+            ])
+    with open(summary_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["metric", "value"])
+        for key, value in summary.items():
+            writer.writerow([key, value])
+    
+    print(f"CSV exported:\n{per_query_path}\n{summary_path}")
+
+def main():
+    print("Evaluating results...")
+    output = evaluate_dataset(
+    generated_path=r"MScThesis_1511_adjusted/generated_code.json", 
+    reference_path=r"MScThesis_1511_adjusted/references.json", 
+    model_name="llama3.2"
+    )
+    print("Exporting results to csv...")
+    export_results_to_csv(output, per_query_path="results_per_query.csv", summary_path="summary_results.csv")
+
+if __name__ == "__main__":
+    main()

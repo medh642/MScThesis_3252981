@@ -356,7 +356,7 @@ def extract_layer_metadata(filepath):
     ext = os.path.splitext(raw)[1].lower()
 
     try:
-        if ext in ['.shp', '.geojson', '.gpkg']:
+        if ext in ['.shp', '.geojson']:
             gdf = gpd.read_file(raw)
             metadata.update({
                 'type': 'vector', 
@@ -385,6 +385,28 @@ def extract_layer_metadata(filepath):
                 metadata[f'layer_{layer}'] = layer_metadata
             metadata['type'] = 'geodatabase'     
             metadata['layers']  = layers
+        ## Adjusting code to account for .gpkg layers 25-11-2025
+        elif ext == ".gpkg":
+            try:
+                layers = fiona.listlayers(raw)
+                metadata["type"] = "geopackage"
+                metadata["layers"] = layers
+                metadata["num_layers"] = len(layers)
+
+                for layer in layers:
+                    gdf = gpd.read_file(raw, layer=layer)
+                    layer_meta = {
+                        'type': 'vector', 
+                        'layer_name': layer, 
+                        'crs': str(gdf.crs), 
+                        'geometry_type': list(gdf.geom_type.unique()) if hasattr(gdf, 'geom_type') else [],
+                        'num_features': len(gdf), 
+                        'fields': list(gdf.columns), 
+                        'bounds': gdf.total_bounds.tolist() if hasattr(gdf, 'total_bounds') else []
+                    }
+                    metadata[f"layer_{layer}"] = layer_meta
+            except Exception as e:
+                metadata['error'] = f"Error reading GeoPackage: {str(e)}"
 
 
         elif ext in ['.tif', '.tiff']:

@@ -4,30 +4,32 @@
   },
   {
     "query": "Load the NL_Provinces.shp file and extract the geometry bounds for the province named 'Noord-Holland'."
-  }, 
-    {
+  },
+  {
+    "query": "From NL_Roads dataset list the features that have a null name/code."
+  },
+  {
     "query": "Load the RotterdamLULC.shp dataset and calculate the total area for each class_2018 category."
   },
   {
     "query": "How many railway stations are there in 'Drenthe' province and list them?"
   },
   {
-    "query": "Clip the Netherlands_Landuse.gpkg polygons using the boundary of RotterdamLULC.shp and save the clipped output to a new file."
+    "query": "Create a convex hull of Gelderland province"
   },
   {
-    "query": "Spatially join the NL_spoorwegen.gpkg point dataset with NL_Provinces.shp to find which province each railway point belongs to."
+    "query": "Spatially join the NL_spoorwegen.gpkg 'kruising' layer with NL_Provinces.shp to find which province each railway intersection belongs to."
   },
   {
     "query": "Using Netherlands_Landuse.gpkg, compute the percentage of land area occupied by each gewas category in the entire dataset."
   },
-
   {
-    "query": "Find all NL_Highways.gpkg road segments that intersect agricultural areas in Netherlands_Landuse.gpkg and return only those segments with annualTrafficFlow greater than 10000."
+    "query": "Find all NL_Roads.gpkg road segments that intersect agricultural areas in Netherlands_Landuse.gpkg and return only those segments with annualTrafficFlow greater than 20 million and save the output as a gpkg."
   },
   {
-    "query": "For each province in NL_Provinces.shp, compute (1) the total length of highway segments from NL_Highways.gpkg that lie inside the province (in meters), and (2) the count of railway points from NL_spoorwegen.gpkg that are within 500 meters of any highway segment in that province. Output a table with columns: province_name, highway_length_m, nearby_railway_count."
+    "query": "For each province in NL_Provinces.shp, compute (1) the total length of highway segments from NL_Roads.gpkg that lie inside the province (in meters), and (2) the count of railway stations from NL_spoorwegen.gpkg that are within 500 meters of any highway segment in that province. Output a table with columns: province_name, highway_length_m, nearby_railway_count."
   },
   {
-    "query": "Create a merged geospatial dataset that links NL_spoorwegen.gpkg railway points to the nearest highway segment in NL_Highways.gpkg and compute the distance between them using Shapely."
+    "query": "List all spooras segments whose start and end points exceed 10m elevation difference."
   }
 ]
